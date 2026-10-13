@@ -15,7 +15,6 @@ fi
 
 unzip -q "$ZIP" -d "$WORK"
 
-# Find the actual app root by locating package.json.
 PKG=$(find "$WORK" -maxdepth 4 -name package.json -type f | head -n 1 || true)
 
 publish_dir() {
@@ -37,6 +36,9 @@ if [ -n "$PKG" ]; then
   APP_DIR=$(dirname "$PKG")
   cd "$APP_DIR"
 
+  echo "=== Museum package scripts ==="
+  node -e "const p=require('./package.json'); console.log(JSON.stringify({name:p.name,engines:p.engines,scripts:p.scripts},null,2))"
+
   if [ -f package-lock.json ]; then
     npm ci
   else
@@ -50,10 +52,11 @@ if [ -n "$PKG" ]; then
     exit 1
   fi
 
+  echo "=== Museum build output ==="
+  find . -maxdepth 4 -type f \( -path './dist/*' -o -path './build/*' -o -path './out/*' \) | sort | head -n 200
+
   cd - >/dev/null
 
-  # Check common frontend build roots. Some portable builds put the browser
-  # app one level below dist (for example dist/browser or dist/public).
   for candidate in "$APP_DIR/dist" "$APP_DIR/build" "$APP_DIR/out"; do
     if [ ! -d "$candidate" ]; then
       continue
@@ -73,12 +76,10 @@ if [ -n "$PKG" ]; then
   done
 
   echo "Build completed but no browser index.html was found in dist/build/out" >&2
-  echo "Build tree:" >&2
   find "$APP_DIR" -maxdepth 4 -type f | sort | tail -n 200 >&2
   exit 1
 fi
 
-# Fallback for a plain static HTML archive.
 INDEX=$(find "$WORK" -maxdepth 5 -name index.html -type f | head -n 1 || true)
 if [ -n "$INDEX" ]; then
   STATIC_DIR=$(dirname "$INDEX")
