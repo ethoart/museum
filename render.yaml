@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: dewmanthi-museum-backup
+    runtime: static
+    buildCommand: bash scripts/render-build.sh
+    staticPublishPath: ./render-dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
