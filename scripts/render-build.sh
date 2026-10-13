@@ -18,6 +18,21 @@ unzip -q "$ZIP" -d "$WORK"
 # Find the actual app root by locating package.json.
 PKG=$(find "$WORK" -maxdepth 4 -name package.json -type f | head -n 1 || true)
 
+publish_dir() {
+  local dir="$1"
+  rm -rf "$OUT"
+  mkdir -p "$OUT"
+  cp -a "$dir"/. "$OUT"/
+  echo "Published static site from $dir"
+  echo "Publish root contents:"
+  find "$OUT" -maxdepth 2 -type f | sort | head -n 100
+
+  if [ ! -f "$OUT/index.html" ]; then
+    echo "ERROR: published directory has no root index.html" >&2
+    exit 1
+  fi
+}
+
 if [ -n "$PKG" ]; then
   APP_DIR=$(dirname "$PKG")
   cd "$APP_DIR"
@@ -28,7 +43,6 @@ if [ -n "$PKG" ]; then
     npm install
   fi
 
-  # Prefer an existing production build script.
   if npm run | grep -qE '^  build'; then
     npm run build
   else
@@ -38,25 +52,37 @@ if [ -n "$PKG" ]; then
 
   cd - >/dev/null
 
-  # Support common frontend output directories.
+  # Check common frontend build roots. Some portable builds put the browser
+  # app one level below dist (for example dist/browser or dist/public).
   for candidate in "$APP_DIR/dist" "$APP_DIR/build" "$APP_DIR/out"; do
-    if [ -d "$candidate" ]; then
-      cp -a "$candidate"/. "$OUT"/
-      echo "Published static output from $candidate"
+    if [ ! -d "$candidate" ]; then
+      continue
+    fi
+
+    if [ -f "$candidate/index.html" ]; then
+      publish_dir "$candidate"
+      exit 0
+    fi
+
+    INDEX=$(find "$candidate" -maxdepth 4 -name index.html -type f | head -n 1 || true)
+    if [ -n "$INDEX" ]; then
+      STATIC_DIR=$(dirname "$INDEX")
+      publish_dir "$STATIC_DIR"
       exit 0
     fi
   done
 
-  echo "Build completed but no dist/build/out directory was found" >&2
+  echo "Build completed but no browser index.html was found in dist/build/out" >&2
+  echo "Build tree:" >&2
+  find "$APP_DIR" -maxdepth 4 -type f | sort | tail -n 200 >&2
   exit 1
 fi
 
 # Fallback for a plain static HTML archive.
-INDEX=$(find "$WORK" -maxdepth 4 -name index.html -type f | head -n 1 || true)
+INDEX=$(find "$WORK" -maxdepth 5 -name index.html -type f | head -n 1 || true)
 if [ -n "$INDEX" ]; then
   STATIC_DIR=$(dirname "$INDEX")
-  cp -a "$STATIC_DIR"/. "$OUT"/
-  echo "Published static site from $STATIC_DIR"
+  publish_dir "$STATIC_DIR"
   exit 0
 fi
 
